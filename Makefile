@@ -2,8 +2,12 @@ BUNDLE = noti.app
 ICON_SRC = huh.png
 ICONSET = AppIcon.iconset
 ICNS = AppIcon.icns
+DIST_DIR = dist
+PKG_ID = com.noti.app
+PKG_VERSION = $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist 2>/dev/null || echo 1.0)
+PKG = $(DIST_DIR)/noti-$(PKG_VERSION).pkg
 
-.PHONY: build app run install clean
+.PHONY: build app run install pkg clean
 
 build:
 	swift build -c release
@@ -39,5 +43,16 @@ run: app
 install: app
 	cp -r $(BUNDLE) ~/Applications/
 
+pkg: app
+	mkdir -p $(DIST_DIR)
+	rm -f $(PKG)
+	pkgbuild \
+		--component $(BUNDLE) \
+		--install-location /Applications \
+		--identifier $(PKG_ID) \
+		--version $(PKG_VERSION) \
+		$(PKG)
+	@echo "Created $(PKG)"
+
 clean:
-	rm -rf $(BUNDLE) .build
+	rm -rf $(BUNDLE) .build $(DIST_DIR)
