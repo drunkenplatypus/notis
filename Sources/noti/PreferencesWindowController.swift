@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 @MainActor
 final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
@@ -7,6 +8,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
 
     private let statusValueLabel = NSTextField(labelWithString: "Not configured")
     private let tokenField = NSTextField()
+    private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
     private let saveButton = NSButton(title: "Save", target: nil, action: nil)
     private let removeButton = NSButton(title: "Remove Token", target: nil, action: nil)
 
@@ -15,7 +17,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         self.onRefresh = onRefresh
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 230),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 265),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -47,6 +49,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         let combined = detail.isEmpty ? coordinator.statusText : "\(coordinator.statusText) — \(detail)"
         statusValueLabel.stringValue = combined
         removeButton.isEnabled = coordinator.isAuthenticated
+        launchAtLoginCheckbox.state = LaunchAtLoginManager.isEnabled ? .on : .off
     }
 
     func focusTokenField() {
@@ -79,6 +82,11 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         guidance.textColor = .secondaryLabelColor
         guidance.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
 
+        // Launch-at-login
+        launchAtLoginCheckbox.target = self
+        launchAtLoginCheckbox.action = #selector(toggleLaunchAtLogin)
+        launchAtLoginCheckbox.font = .systemFont(ofSize: 13)
+
         // Buttons
         saveButton.bezelStyle = .push
         saveButton.keyEquivalent = "\r"
@@ -95,7 +103,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         buttonRow.addView(saveButton, in: .trailing)
 
         // Outer vertical stack
-        let stack = NSStackView(views: [heading, statusRow, tokenRow, guidance, buttonRow])
+        let stack = NSStackView(views: [heading, statusRow, tokenRow, guidance, launchAtLoginCheckbox, buttonRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -110,6 +118,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
             // Stretch these rows to fill the stack width
             tokenRow.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             guidance.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            launchAtLoginCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
             buttonRow.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
         ])
     }
@@ -149,6 +158,36 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         Task {
             await coordinator?.clearToken()
             refresh()
+        }
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let shouldEnable = launchAtLoginCheckbox.state == .on
+        do {
+            try LaunchAtLoginManager.setEnabled(shouldEnable)
+            refresh()
+        } catch {
+            launchAtLoginCheckbox.state = LaunchAtLoginManager.isEnabled ? .on : .off
+            let alert = NSAlert()
+            alert.messageText = "Could not update launch at login"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+    }
+}
+
+@MainActor
+enum LaunchAtLoginManager {
+    static var isEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    static func setEnabled(_ enabled: Bool) throws {
+        if enabled {
+            try SMAppService.mainApp.register()
+        } else {
+            try SMAppService.mainApp.unregister()
         }
     }
 }
