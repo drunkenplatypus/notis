@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager / Xcode build artifacts
+/.build/
+/Packages/
+/DerivedData/
+xcuserdata/
+
+# SwiftPM local workspace files
+/.swiftpm/configuration/registries.json
+/.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Generated app bundle and icon artifacts
+/noti.app/
+/AppIcon.iconset/
+/AppIcon.icns
+
+# Local editor/project files
+/.vscode/
+
+# Local credentials
+.netrc
