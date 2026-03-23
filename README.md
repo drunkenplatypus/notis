@@ -2,6 +2,8 @@
 
 A macOS menu bar app that polls GitHub and delivers native notifications for pull request activity.
 
+<img width="376" height="242" alt="image" src="https://github.com/user-attachments/assets/7a01000a-595f-45f8-8532-941663d19e1e" />
+
 ## Notifications
 
 - **Review requested** — a review has been requested from you on a PR
