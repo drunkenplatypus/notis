@@ -569,16 +569,33 @@ struct PullRequestReference: Decodable {
 struct GitHubReview: Decodable {
     let id: Int
     let body: String?
+    let state: String?
     let submittedAt: Date?
     let user: GitHubActor?
 
     var summary: String {
-        body?.notificationSnippet ?? "Review submitted"
+        if let bodySnippet = body?.notificationSnippet {
+            return bodySnippet
+        }
+
+        switch state?.uppercased() {
+        case "APPROVED":
+            return "Approved"
+        case "CHANGES_REQUESTED":
+            return "Changes requested"
+        case "COMMENTED":
+            return "Commented"
+        case "DISMISSED":
+            return "Dismissed"
+        default:
+            return "Review submitted"
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case id
         case body
+        case state
         case submittedAt = "submitted_at"
         case user
     }
