@@ -6,6 +6,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
     private weak var coordinator: GitHubNotificationCoordinator?
     private var onRefresh: (() -> Void)?
 
+    private let versionValueLabel = NSTextField(labelWithString: "")
     private let statusValueLabel = NSTextField(labelWithString: "Not configured")
     private let tokenField = NSTextField()
     private let notifyReviewRequestedCheckbox = NSButton(checkboxWithTitle: "Review requested", target: nil, action: nil)
@@ -74,6 +75,12 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         // Heading
         let heading = NSTextField(labelWithString: "GitHub Personal Access Token")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
+
+        // Version row
+        versionValueLabel.textColor = .secondaryLabelColor
+        versionValueLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        versionValueLabel.stringValue = appVersionString()
+        let versionRow = formRow(label: "Version", field: versionValueLabel)
 
         // Status row
         statusValueLabel.textColor = .secondaryLabelColor
@@ -149,6 +156,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
         // Outer vertical stack
         let stack = NSStackView(views: [
             heading,
+            versionRow,
             statusRow,
             tokenRow,
             guidance,
@@ -170,6 +178,7 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
             // Stretch these rows to fill the stack width
+            versionRow.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             tokenRow.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             guidance.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
             notificationTypesStack.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
@@ -177,6 +186,22 @@ final class PreferencesWindowController: NSWindowController, NSWindowDelegate {
             hideBotActivityCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: stack.trailingAnchor),
             buttonRow.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
         ])
+    }
+
+    private func appVersionString() -> String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (shortVersion, buildVersion) {
+        case let (short?, build?) where !short.isEmpty && !build.isEmpty:
+            return "\(short) (\(build))"
+        case let (short?, _):
+            return short
+        case let (_, build?):
+            return build
+        default:
+            return "Unknown"
+        }
     }
 
     private func formRow(label labelText: String, field: NSView) -> NSStackView {

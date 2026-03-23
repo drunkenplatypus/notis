@@ -7,7 +7,7 @@ PKG_ID = com.noti.app
 PKG_VERSION = $(shell /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist 2>/dev/null || echo 1.0)
 PKG = $(DIST_DIR)/noti-$(PKG_VERSION).pkg
 
-.PHONY: build app run install pkg clean
+.PHONY: build app run install pkg bump-version clean
 
 build:
 	swift build -c release
@@ -53,6 +53,9 @@ pkg: app
 		--version $(PKG_VERSION) \
 		$(PKG)
 	@echo "Created $(PKG)"
+
+bump-version:
+	./scripts/bump-version.sh $(PART)
 
 clean:
 	rm -rf $(BUNDLE) .build $(DIST_DIR)
