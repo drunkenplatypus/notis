@@ -17,6 +17,21 @@ A macOS menu bar app that polls GitHub and delivers native notifications for pul
 
 The app polls every 10 seconds. It seeds the current state on first launch so only new activity after startup triggers notifications.
 
+## Preferences
+
+Use **Preferences…** to configure which events generate notifications:
+
+- **Review requested**
+- **Pull request reviews**
+- **Pull request comments**
+- **Inline review comments**
+
+You can also toggle:
+
+- **Hide bot comments and reviews** — suppresses notifications from bot accounts.
+
+All preferences are applied immediately and persisted across app restarts.
+
 ## Personal Access Token scopes
 
 ### Classic PAT

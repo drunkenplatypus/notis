@@ -6,6 +6,7 @@ import UserNotifications
 final class GitHubNotificationCoordinator {
     private let api = GitHubAPI()
     private let notifier = MacNotificationService()
+    private let settings = NotiSettings()
 
     private var token: String?
     private var login: String?
@@ -20,6 +21,44 @@ final class GitHubNotificationCoordinator {
     private(set) var assignedPullRequests: [GitHubPullRequest] = []
     private(set) var reviewRequestedPullRequests: [GitHubPullRequest] = []
     private(set) var unreadNotificationCount = 0
+    private(set) var notifyReviewRequested = true
+    private(set) var notifyPullRequestReviews = true
+    private(set) var notifyPullRequestComments = true
+    private(set) var notifyReviewComments = true
+    private(set) var hideBotActivity = true
+
+    init() {
+        notifyReviewRequested = settings.notifyReviewRequested
+        notifyPullRequestReviews = settings.notifyPullRequestReviews
+        notifyPullRequestComments = settings.notifyPullRequestComments
+        notifyReviewComments = settings.notifyReviewComments
+        hideBotActivity = settings.hideBotActivity
+    }
+
+    func setNotifyReviewRequested(_ enabled: Bool) {
+        notifyReviewRequested = enabled
+        settings.notifyReviewRequested = enabled
+    }
+
+    func setNotifyPullRequestReviews(_ enabled: Bool) {
+        notifyPullRequestReviews = enabled
+        settings.notifyPullRequestReviews = enabled
+    }
+
+    func setNotifyPullRequestComments(_ enabled: Bool) {
+        notifyPullRequestComments = enabled
+        settings.notifyPullRequestComments = enabled
+    }
+
+    func setNotifyReviewComments(_ enabled: Bool) {
+        notifyReviewComments = enabled
+        settings.notifyReviewComments = enabled
+    }
+
+    func setHideBotActivity(_ enabled: Bool) {
+        hideBotActivity = enabled
+        settings.hideBotActivity = enabled
+    }
 
     func prepare() async {
         guard let storedToken = GitHubPATStore.load() else {
@@ -129,7 +168,7 @@ final class GitHubNotificationCoordinator {
         assignedPullRequests = fetchedAssigned
 
         let nextReviewRequestKeys = Set(fetchedReviewRequested.map(\.stableKey))
-        if sendNotifications {
+        if sendNotifications, notifyReviewRequested {
             for pullRequest in fetchedReviewRequested where !reviewRequestKeys.contains(pullRequest.stableKey) {
                 badgeCountForThisPoll += 1
                 await notifier.send(
@@ -164,9 +203,10 @@ final class GitHubNotificationCoordinator {
 
             for review in reviews {
                 guard let author = review.user?.login, author != login else { continue }
+                if shouldIgnoreActivity(from: review.user) { continue }
                 let inserted = seenReviewIDs.insert(review.id).inserted
                 print("[noti]   review \(review.id) by \(author) — inserted=\(inserted) notify=\(sendNotifications) hasDate=\(review.submittedAt != nil)")
-                guard inserted, sendNotifications, review.submittedAt != nil else { continue }
+                guard inserted, sendNotifications, notifyPullRequestReviews, review.submittedAt != nil else { continue }
                 newlyNotifiedReviewIDs.insert(review.id)
                 badgeCountForThisPoll += 1
                 await notifier.send(
@@ -179,9 +219,10 @@ final class GitHubNotificationCoordinator {
 
             for comment in issueComments {
                 guard let author = comment.user?.login, author != login else { continue }
+                if shouldIgnoreActivity(from: comment.user) { continue }
                 let inserted = seenIssueCommentIDs.insert(comment.id).inserted
                 print("[noti]   issue comment \(comment.id) by \(author) — inserted=\(inserted) notify=\(sendNotifications)")
-                guard inserted, sendNotifications else { continue }
+                guard inserted, sendNotifications, notifyPullRequestComments else { continue }
                 badgeCountForThisPoll += 1
                 await notifier.send(
                     title: "Pull request comment",
@@ -193,11 +234,12 @@ final class GitHubNotificationCoordinator {
 
             for comment in reviewComments {
                 guard let author = comment.user?.login, author != login else { continue }
+                if shouldIgnoreActivity(from: comment.user) { continue }
                 // Skip if this comment belongs to a review we already notified about
                 if let reviewID = comment.pullRequestReviewID, newlyNotifiedReviewIDs.contains(reviewID) { continue }
                 let inserted = seenReviewCommentIDs.insert(comment.id).inserted
                 print("[noti]   review comment \(comment.id) by \(author) — inserted=\(inserted) notify=\(sendNotifications)")
-                guard inserted, sendNotifications else { continue }
+                guard inserted, sendNotifications, notifyReviewComments else { continue }
                 badgeCountForThisPoll += 1
                 await notifier.send(
                     title: "Review comment",
@@ -209,6 +251,14 @@ final class GitHubNotificationCoordinator {
         }
 
         unreadNotificationCount = sendNotifications ? badgeCountForThisPoll : 0
+    }
+
+    private func shouldIgnoreActivity(from actor: GitHubActor?) -> Bool {
+        guard hideBotActivity, let actor else {
+            return false
+        }
+
+        return actor.isBot
     }
 
     private func resetState(message: String) {
@@ -554,6 +604,15 @@ struct GitHubComment: Decodable {
 
 struct GitHubActor: Decodable {
     let login: String
+    let type: String?
+
+    var isBot: Bool {
+        if type?.caseInsensitiveCompare("Bot") == .orderedSame {
+            return true
+        }
+
+        return login.lowercased().hasSuffix("[bot]")
+    }
 }
 
 struct GitHubAPIMessage: Decodable {
@@ -581,4 +640,54 @@ extension String {
         let endIndex = firstLine.index(firstLine.startIndex, offsetBy: 117)
         return String(firstLine[..<endIndex]) + "..."
     }
+}
+
+final class NotiSettings {
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        registerDefaults()
+    }
+
+    var hideBotActivity: Bool {
+        get { defaults.bool(forKey: Self.hideBotActivityKey) }
+        set { defaults.set(newValue, forKey: Self.hideBotActivityKey) }
+    }
+
+    var notifyReviewRequested: Bool {
+        get { defaults.bool(forKey: Self.notifyReviewRequestedKey) }
+        set { defaults.set(newValue, forKey: Self.notifyReviewRequestedKey) }
+    }
+
+    var notifyPullRequestReviews: Bool {
+        get { defaults.bool(forKey: Self.notifyPullRequestReviewsKey) }
+        set { defaults.set(newValue, forKey: Self.notifyPullRequestReviewsKey) }
+    }
+
+    var notifyPullRequestComments: Bool {
+        get { defaults.bool(forKey: Self.notifyPullRequestCommentsKey) }
+        set { defaults.set(newValue, forKey: Self.notifyPullRequestCommentsKey) }
+    }
+
+    var notifyReviewComments: Bool {
+        get { defaults.bool(forKey: Self.notifyReviewCommentsKey) }
+        set { defaults.set(newValue, forKey: Self.notifyReviewCommentsKey) }
+    }
+
+    private func registerDefaults() {
+        defaults.register(defaults: [
+            Self.notifyReviewRequestedKey: true,
+            Self.notifyPullRequestReviewsKey: true,
+            Self.notifyPullRequestCommentsKey: true,
+            Self.notifyReviewCommentsKey: true,
+            Self.hideBotActivityKey: true
+        ])
+    }
+
+    private static let notifyReviewRequestedKey = "noti.notifyReviewRequested"
+    private static let notifyPullRequestReviewsKey = "noti.notifyPullRequestReviews"
+    private static let notifyPullRequestCommentsKey = "noti.notifyPullRequestComments"
+    private static let notifyReviewCommentsKey = "noti.notifyReviewComments"
+    private static let hideBotActivityKey = "noti.hideBotActivity"
 }
